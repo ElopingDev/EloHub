@@ -1,10 +1,11 @@
 local universeId = game.GameId
+
 if universeId == 7436755782 then
-loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ElopingDev/EloHub/refs/heads/main/EloHubGarden.lua"))()end
-end
+    loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ElopingDev/EloHub/refs/heads/main/EloHubGarden.lua"))()
 
 elseif universeId == 5750914919 then
-loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ElopingDev/EloHub/refs/heads/main/EloHubFisch.lua"))()end
+    loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ElopingDev/EloHub/refs/heads/main/EloHubFisch.lua"))()
+
 else
-print("Didnt find supported game")
+    print("Didn't find supported game")
 end
