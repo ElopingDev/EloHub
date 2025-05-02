@@ -14,13 +14,10 @@ local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local Mouse = LocalPlayer:GetMouse()
-local dragging = false
-local dragInput
-local dragStart
-local startPos
 local instantReelLoopActive = false
 local autoCastLoopActive = false
 local autoCastLoopThread = nil
+local autoShakeLoopThread = nil -- Added for AutoShake loop management
 local currentRodName = nil
 local isFlying = false
 local flySpeed = 50
@@ -285,7 +282,6 @@ local function CreateSlider(text, minVal, maxVal, defaultVal, position, parent)
 
     local currentValue = defaultVal
     local changedSignal = Instance.new("BindableEvent")
-    local isDragging = false
 
     local function UpdateSlider(inputPos)
         local relativeX = inputPos.X - sliderFrame.AbsolutePosition.X
@@ -298,19 +294,17 @@ local function CreateSlider(text, minVal, maxVal, defaultVal, position, parent)
 
     sliderButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = true
             UpdateSlider(input.Position)
         end
     end)
 
     sliderButton.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            isDragging = false
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             UpdateSlider(input.Position)
         end
     end)
@@ -412,51 +406,6 @@ local function CreateButton(text, position, size, parent)
     return button
 end
 
-local function MakeDraggable(topbar, frame)
-    topbar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local guiObjects = topbar:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            local onButton = false
-            for _, obj in ipairs(guiObjects) do
-                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                    onButton = true
-                    break
-                end
-            end
-
-            if not onButton then
-                dragging = true
-                dragStart = input.Position
-                startPos = frame.Position
-
-                local connection
-                connection = input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                        if connection then
-                           connection:Disconnect()
-                           connection = nil
-                        end
-                    end
-                end)
-            end
-        end
-    end)
-
-    topbar.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-end
-
 
 local MainFrame = CreateRoundedFrame(UDim2.new(0, 600, 0, 350), UDim2.new(0.5, -300, 0.5, -175), Color3.fromRGB(20, 20, 25), EloHub)
 
@@ -478,7 +427,6 @@ BottomFix.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 BottomFix.BorderSizePixel = 0
 BottomFix.Parent = TitleBar
 
-MakeDraggable(TitleBar, MainFrame)
 
 local TitleText = Instance.new("TextLabel")
 TitleText.Size = UDim2.new(0, 200, 0, 30)
@@ -681,9 +629,6 @@ local WalkSpeedSlider = CreateSlider("Walk Speed", 16, 500, originalWalkSpeed, U
 
 -- Settings Tab Content
 local EjectButton = CreateButton("Eject Script", UDim2.new(0, 0, 0, 0), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
-local SaveConfigButton = CreateButton("Save Config", UDim2.new(0, 0, 0, 30), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
-local LoadConfigButton = CreateButton("Load Config", UDim2.new(0, 0, 0, 60), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
-
 
 local teleportLocations = {
     {"Abyssal Zenith", Vector3.new(-13518.85, -11050.19, 116.59)},
@@ -804,27 +749,7 @@ clickDetector.MouseButton1Click:Connect(function()
     end
 end)
 
--- NECESSARY HYDROXIDE LIB
-local aux = nil
-local loadSuccess, loadResult = pcall(function()
-    local httpService = game:GetService("HttpService")
-    local url = "https://raw.githubusercontent.com/Upbolt/Hydroxide/revision/ohaux.lua"
-    local scriptSource = nil
-    if httpService and httpService.HttpEnabled then
-        scriptSource = httpService:GetAsync(url, true)
-    elseif game.HttpGetAsync then
-         scriptSource = game:HttpGetAsync(url, true)
-    else
-        return nil
-    end
-    return loadstring(scriptSource)()
-end)
-
-if not loadSuccess then
-else
-    aux = loadResult
-end
-
+--========================== ALL FEATURES ==========================--
 
 InstantSell.MouseButton1Click:Connect(function()
     local plr = game.Players.LocalPlayer
@@ -864,51 +789,6 @@ EjectButton.MouseButton1Click:Connect(function()
 end)
 
 
--- Config Save/Load Functions
-local function SaveConfiguration()
-    local configData = {}
-    for featureId, checkboxData in pairs(checkboxRegistry) do
-        local keybind = checkboxData:GetKeybind()
-        if keybind then
-            configData[featureId] = keybind.Name
-        end
-    end
-
-    local success, jsonData = pcall(HttpService.JSONEncode, HttpService, configData)
-    if success then
-        writefile("EloHub.cfg", jsonData)
-    end
-end
-
-local function LoadConfiguration()
-    local success, fileContent = pcall(readfile, "EloHub.cfg")
-    if not success or not fileContent then return end
-
-    local jsonDataSuccess, configData = pcall(HttpService.JSONDecode, HttpService, fileContent)
-    if not jsonDataSuccess or type(configData) ~= "table" then return end
-
-    -- Clear existing keybinds before loading
-    for keybind, _ in pairs(activeKeybinds) do
-        activeKeybinds[keybind] = nil
-    end
-     for _, checkboxData in pairs(checkboxRegistry) do
-         checkboxData:SetKeybind(nil) -- Clear current keybind visually
-     end
-
-    -- Apply loaded keybinds
-    for featureId, keyName in pairs(configData) do
-        local checkboxData = checkboxRegistry[featureId]
-        local keyCode = Enum.KeyCode[keyName]
-        if checkboxData and keyCode then
-            checkboxData:SetKeybind(keyCode)
-        end
-    end
-end
-
-SaveConfigButton.MouseButton1Click:Connect(SaveConfiguration)
-LoadConfigButton.MouseButton1Click:Connect(LoadConfiguration)
-
-
 InstantReel.Changed.Event:Connect(function(newState)
     instantReelLoopActive = newState
 
@@ -946,6 +826,27 @@ InstantReel.Changed.Event:Connect(function(newState)
 end)
 
 AutoShake.Changed.Event:Connect(function(newState)
+    if autoShakeLoopThread then
+        task.cancel(autoShakeLoopThread)
+        autoShakeLoopThread = nil
+    end
+
+    if newState then
+        autoShakeLoopThread = task.spawn(function()
+            while newState do
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                local shakeUi = playerGui and playerGui:FindFirstChild("shakeui")
+                local safeZone = shakeUi and shakeUi:FindFirstChild("safezone")
+                local buttonContainer = safeZone and safeZone:FindFirstChild("button")
+                local shakeEvent = buttonContainer and buttonContainer:FindFirstChild("shake")
+                if shakeEvent and shakeEvent:IsA("RemoteEvent") then
+                    shakeEvent:FireServer()
+                    task.wait(0.1)
+                end
+                task.wait(0.1)
+            end
+        end)
+    end
 end)
 
 AutoCast.Changed.Event:Connect(function(newState)
@@ -958,55 +859,45 @@ AutoCast.Changed.Event:Connect(function(newState)
     end
 
     if newState then
-        if aux and aux.searchClosure then
-            local scriptPathInstance = nil
-            local pathSuccess, pathResult = pcall(function()
-                return game:GetService("Players").LocalPlayer.PlayerGui.hud.safezone.announcements.announcer
-            end)
-
-            if pathSuccess and pathResult then
-                scriptPathInstance = pathResult
-
-                local closureName = "Unnamed function"
-                local upvalueIndex = 1
-                local closureConstants = {
-                    [1] = "script",
-                    [3] = "rodequipped",
-                    [4] = "WaitForChild",
-                    [5] = "Clone",
-                    [6] = "Main",
-                    [7] = "TextTransparency"
-                }
-
-                local targetClosure = nil
-                local searchSuccess, searchResult = pcall(aux.searchClosure, scriptPathInstance, closureName, upvalueIndex, closureConstants)
-
-                if searchSuccess and searchResult then
-                    targetClosure = searchResult
-                end
-
-                if type(targetClosure) == "function" then
-                    local upvalueSuccess, upvalueValue = pcall(debug.getupvalue, targetClosure, 1)
-
-                    if upvalueSuccess and type(upvalueValue) == "string" then
-                        currentRodName = upvalueValue
+        local currentRodInstance = nil
+        local function FindRod()
+            if playerFolder then
+                for _, item in ipairs(playerFolder:GetChildren()) do
+                    if item:IsA("Tool") and string.find(item.Name, "Rod", 1, true) then
+                        return item
                     end
                 end
             end
+            for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
+                if item:IsA("Tool") and string.find(item.Name, "Rod", 1, true) then
+                    return item
+                end
+            end
+            return nil
         end
 
-        if autoCastLoopActive and currentRodName and playerFolder and playerFolder:FindFirstChild(currentRodName) then
+        currentRodInstance = FindRod()
+
+        if autoCastLoopActive and currentRodInstance then
+            print("EloHub: Found rod instance:", currentRodInstance.Name)
             autoCastLoopThread = task.spawn(function()
                 while autoCastLoopActive do
-                    local rodInstance = playerFolder:FindFirstChild(currentRodName)
-                    local eventsFolder = rodInstance and rodInstance:FindFirstChild("events")
+                    -- Check if the found rod is currently equipped
+                    if currentRodInstance and currentRodInstance.Parent == playerFolder then
+                        local eventsFolder = currentRodInstance:FindFirstChild("events")
                     local castEvent = eventsFolder and eventsFolder:FindFirstChild("cast")
-
                     if castEvent and castEvent:IsA("RemoteEvent") then
-                        local rodCastDistance = 50
+                        local rodCastDistance = 50 -- You might want to make this configurable later
                         local idkwhatthisnumberis = 1
                         castEvent:FireServer(rodCastDistance, idkwhatthisnumberis)
                     else
+                        print("EloHub Debug: Failed check. rodInstance:", rodInstance, "eventsFolder:", eventsFolder, "castEvent:", castEvent) -- Added debug
+                        autoCastLoopActive = false
+                        AutoCast.SetValue(false) -- Stop if cast event not found on equipped rod
+                        break
+                    end
+                    else -- Rod is no longer equipped or instance became invalid
+                        print("EloHub: AutoCast stopped. Rod instance not equipped or invalid.")
                         autoCastLoopActive = false
                         AutoCast.SetValue(false)
                         break
@@ -1014,8 +905,9 @@ AutoCast.Changed.Event:Connect(function(newState)
                     task.wait(1)
                 end
             end)
-        elseif autoCastLoopActive then
-             autoCastLoopActive = false
+        else -- If no rod was found anywhere initially
+            print("EloHub: AutoCast failed. No tool with 'Rod' in its name found in Backpack or Character.")
+            autoCastLoopActive = false
              AutoCast.SetValue(false)
         end
     end
@@ -1171,6 +1063,9 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 
 end)
+
+--========================== ALL FEATURES ==========================--
+
 
 local function AdjustCanvasSize(scrollFrame)
     local totalHeight = 0
