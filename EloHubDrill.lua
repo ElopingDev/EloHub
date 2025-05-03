@@ -654,7 +654,7 @@ InstaSellButton.MouseButton1Click:Connect(function()
     local sellAllRE = ReplicatedStorage.Packages.Knit.Services.OreService.RE.SellAll
 
     rootPart.CFrame = CFrame.new(sellPosition)
-    task.wait(0.1) -- Reduced wait time slightly
+    task.wait(0.25) -- Reduced wait time slightly
     sellAllRE:FireServer()
     -- task.wait() -- Uncomment if TP back happens too fast
     rootPart.CFrame = originalCFrame
