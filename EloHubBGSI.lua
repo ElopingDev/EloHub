@@ -406,33 +406,50 @@ local function CreateButton(text, position, size, parent)
 end
 
 local function MakeDraggable(topbar, frame)
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+
     topbar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local guiObjects = topbar:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            local onButton = false
-            for _, obj in ipairs(guiObjects) do
-                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                    onButton = true
-                    break
+            -- Get the mouse position
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Check if we're clicking on a button
+            local clickedOnButton = false
+            for _, child in pairs(topbar:GetChildren()) do
+                if (child:IsA("TextButton") or child:IsA("ImageButton")) then
+                    local buttonPos = child.AbsolutePosition
+                    local buttonSize = child.AbsoluteSize
+                    
+                    -- Check if mouse is within the button's bounds
+                    if mousePos.X >= buttonPos.X and mousePos.X <= buttonPos.X + buttonSize.X and
+                       mousePos.Y >= buttonPos.Y and mousePos.Y <= buttonPos.Y + buttonSize.Y then
+                        clickedOnButton = true
+                        break
+                    end
                 end
             end
-
-            if not onButton then
-                dragging = true
-                dragStart = input.Position
-                startPos = frame.Position
-
-                local connection
-                connection = input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                        if connection then
-                           connection:Disconnect()
-                           connection = nil
-                        end
-                    end
-                end)
+            
+            if clickedOnButton then
+                return -- Don't start dragging if clicked on a button
             end
+            
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            local connection
+            connection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if connection then
+                       connection:Disconnect()
+                       connection = nil
+                    end
+                end
+            end)
         end
     end)
 
@@ -449,7 +466,6 @@ local function MakeDraggable(topbar, frame)
         end
     end)
 end
-
 
 local MainFrame = CreateRoundedFrame(UDim2.new(0, 600, 0, 350), UDim2.new(0.5, -300, 0.5, -175), Color3.fromRGB(20, 20, 25), EloHub)
 
@@ -655,6 +671,7 @@ end)
 local AutoBubble = CreateCheckbox("Auto-Bubble", UDim2.new(0, 0, 0, 0), MainTab.LeftContent, "AutoBubble")
 local NoClipCheckbox = CreateCheckbox("NoClip", UDim2.new(0, 0, 0, 25), MainTab.LeftContent, "NoClip") -- Renamed
 local ClaimPlaytimesButton = CreateButton("Claim Playtimes", UDim2.new(0, 0, 0, 50), UDim2.new(1, -10, 0, 25), MainTab.LeftContent)
+local InstantSellButton = CreateButton("Instant Sell", UDim2.new(0, 0, 0, 80), UDim2.new(1, -10, 0, 25), MainTab.LeftContent) -- Added Instant Sell button
 local HatchingZone = CreateButton("HatchingZone TP", UDim2.new(0, 0, 0, 140), UDim2.new(1, -10, 0, 25), TeleportTab.LeftContent)
 
 
@@ -685,6 +702,18 @@ ClaimPlaytimesButton.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Added Instant Sell Button Logic
+InstantSellButton.MouseButton1Click:Connect(function()
+    local ohString1 = "SellBubble"
+    local remoteEvent = game:GetService("ReplicatedStorage"):FindFirstChild("Shared", true)
+                                :FindFirstChild("Framework", true)
+                                :FindFirstChild("Network", true)
+                                :FindFirstChild("Remote", true)
+                                :FindFirstChild("Event")
+    if remoteEvent and remoteEvent:IsA("RemoteEvent") then
+        remoteEvent:FireServer(ohString1)
+    end
+end)
 
 local UnlockAll = CreateButton("Unlock All Islands", UDim2.new(0, 0, 0, 170), UDim2.new(1, -10, 0, 25), TeleportTab.LeftContent)
 
