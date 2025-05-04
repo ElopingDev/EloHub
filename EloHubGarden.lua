@@ -347,33 +347,50 @@ local function CreateButton(text, position, size, parent)
 end
 
 local function MakeDraggable(topbar, frame)
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+
     topbar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local guiObjects = topbar:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
-            local onButton = false
-            for _, obj in ipairs(guiObjects) do
-                if obj:IsA("TextButton") or obj:IsA("ImageButton") then
-                    onButton = true
-                    break
+            -- Get the mouse position
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Check if we're clicking on a button
+            local clickedOnButton = false
+            for _, child in pairs(topbar:GetChildren()) do
+                if (child:IsA("TextButton") or child:IsA("ImageButton")) then
+                    local buttonPos = child.AbsolutePosition
+                    local buttonSize = child.AbsoluteSize
+                    
+                    -- Check if mouse is within the button's bounds
+                    if mousePos.X >= buttonPos.X and mousePos.X <= buttonPos.X + buttonSize.X and
+                       mousePos.Y >= buttonPos.Y and mousePos.Y <= buttonPos.Y + buttonSize.Y then
+                        clickedOnButton = true
+                        break
+                    end
                 end
             end
-
-            if not onButton then
-                dragging = true
-                dragStart = input.Position
-                startPos = frame.Position
-
-                local connection
-                connection = input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                        if connection then
-                           connection:Disconnect()
-                           connection = nil
-                        end
-                    end
-                end)
+            
+            if clickedOnButton then
+                return -- Don't start dragging if clicked on a button
             end
+            
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            local connection
+            connection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if connection then
+                       connection:Disconnect()
+                       connection = nil
+                    end
+                end
+            end)
         end
     end)
 
@@ -609,28 +626,6 @@ local WalkSpeedSlider = CreateSlider("Walk Speed", 16, 500, originalWalkSpeed, U
 local EjectButton = CreateButton("Eject Script", UDim2.new(0, 0, 0, 0), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
 local SaveConfigButton = CreateButton("Save Config", UDim2.new(0, 0, 0, 30), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
 local LoadConfigButton = CreateButton("Load Config", UDim2.new(0, 0, 0, 60), UDim2.new(1, -10, 0, 25), SettingsTab.LeftContent)
-
--- NECESSARY HYDROXIDE LIB
-local aux = nil
-local loadSuccess, loadResult = pcall(function()
-    local httpService = game:GetService("HttpService")
-    local url = "https://raw.githubusercontent.com/Upbolt/Hydroxide/revision/ohaux.lua"
-    local scriptSource = nil
-    if httpService and httpService.HttpEnabled then
-        scriptSource = httpService:GetAsync(url, true)
-    elseif game.HttpGetAsync then
-         scriptSource = game:HttpGetAsync(url, true)
-    else
-        return nil
-    end
-    return loadstring(scriptSource)()
-end)
-
-if not loadSuccess then
-else
-    aux = loadResult
-end
--- AutoPlant Feature
 
 -- AutoPlant Feature Logic
 local function findAndEquipSeed()
