@@ -406,6 +406,67 @@ local function CreateButton(text, position, size, parent)
     return button
 end
 
+local function MakeDraggable(topbar, frame)
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            -- Get the mouse position
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Check if we're clicking on a button
+            local clickedOnButton = false
+            for _, child in pairs(topbar:GetChildren()) do
+                if (child:IsA("TextButton") or child:IsA("ImageButton")) then
+                    local buttonPos = child.AbsolutePosition
+                    local buttonSize = child.AbsoluteSize
+                    
+                    -- Check if mouse is within the button's bounds
+                    if mousePos.X >= buttonPos.X and mousePos.X <= buttonPos.X + buttonSize.X and
+                       mousePos.Y >= buttonPos.Y and mousePos.Y <= buttonPos.Y + buttonSize.Y then
+                        clickedOnButton = true
+                        break
+                    end
+                end
+            end
+            
+            if clickedOnButton then
+                return -- Don't start dragging if clicked on a button
+            end
+            
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+
+            local connection
+            connection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    if connection then
+                       connection:Disconnect()
+                       connection = nil
+                    end
+                end
+            end)
+        end
+    end)
+
+    topbar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
 
 local MainFrame = CreateRoundedFrame(UDim2.new(0, 600, 0, 350), UDim2.new(0.5, -300, 0.5, -175), Color3.fromRGB(20, 20, 25), EloHub)
 
@@ -426,6 +487,8 @@ BottomFix.Position = UDim2.new(0, 0, 1, -10)
 BottomFix.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 BottomFix.BorderSizePixel = 0
 BottomFix.Parent = TitleBar
+
+MakeDraggable(TitleBar, MainFrame)
 
 
 local TitleText = Instance.new("TextLabel")
