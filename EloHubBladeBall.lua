@@ -63,6 +63,11 @@ local Parried = false
 local BallConnection = nil
 local BallsFolder = nil -- Will store the workspace.Balls folder
 
+-- Auto Clicker Variables
+local AutoClickerEnabled = false -- Controlled by checkbox
+local LastAutoClickTime = 0
+local AutoClickInterval = 1 / 20 -- Target 20 CPS (clicks per second)
+
 -- Parry timing settings
 local DelayOffset = 0.1        -- Don't parry too early
 local IdealParryTime = 0.25    -- Try to parry ~0.25s before impact
@@ -689,7 +694,7 @@ end)
 
 -- Feature Checkboxes (Assign unique IDs)
 local AutoParry = CreateCheckbox("AutoParry", UDim2.new(0, 0, 0, 0), MainTab.LeftContent, "AutoParry")
-local Feature2 = CreateCheckbox("Feature2", UDim2.new(0, 0, 0, 25), MainTab.LeftContent, "Feature2")
+local AutoClicker = CreateCheckbox("Auto Clicker (LMB)", UDim2.new(0, 0, 0, 25), MainTab.LeftContent, "AutoClicker")
 local Feature3 = CreateButton("Feature3", UDim2.new(0, 0, 0, 75), UDim2.new(1, -10, 0, 25), MainTab.LeftContent)
 
 -- Ball related functions
@@ -765,42 +770,71 @@ AutoParry.Changed.Event:Connect(function(newState)
     AutoParryActive = newState
 end)
 
+-- Hooking the AutoClicker checkbox change
+AutoClicker.Changed.Event:Connect(function(newState)
+    print("EloHub: DEBUG - AutoClicker checkbox changed. New state:", newState)
+    AutoClickerEnabled = newState
+end)
+
 RunService.RenderStepped:Connect(function()
-    -- Run the auto-parry logic only if AutoParry is active
-    if not AutoParryActive then return end
-    if not BallsFolder then return end -- Safety check: ensure BallsFolder is available
-    
-    local currentCharacter = Player.Character -- Use a local variable for current character state in this frame
-    local currentHRP = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
-    if not currentCharacter or not currentHRP then return end -- Essential check: no character/HRP, no parry
+    -- Auto Parry Logic
+    if AutoParryActive then
+        if BallsFolder then -- Only proceed if BallsFolder is available
+            local currentCharacter = Player.Character
+            local currentHRP = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+            if currentCharacter and currentHRP then -- Essential check: character/HRP must exist
+                local Ball = GetBall()
+                if Ball then
+                    local Velocity = Ball.AssemblyLinearVelocity
+                    local Speed = Velocity.Magnitude
+                    
+                    if Speed >= 1 then -- If ball speed is very low, don't try to predict or parry.
+                        -- Dynamic prediction of ball trajectory based on current velocity
+                        local FutureBallPosition = Ball.Position + Velocity * 0.25 -- Predicting position 0.25s ahead
+                        local PredictedDistance = (currentHRP.Position - FutureBallPosition).Magnitude
 
-    local Ball = GetBall()
-    if not Ball then return end
+                        -- Calculate the time to impact with the predicted position
+                        local TimeToImpact = (Speed > 0) and (PredictedDistance / Speed) or math.huge
 
-    local Velocity = Ball.AssemblyLinearVelocity
-    local Speed = Velocity.Magnitude
-    -- local Distance = (currentHRP.Position - Ball.Position).Magnitude -- Distance to current ball pos, not used for TimeToImpact directly
-    
-    -- If ball speed is very low, don't try to predict or parry.
-    if Speed < 1 then return end
-
-    -- Dynamic prediction of ball trajectory based on current velocity
-    local FutureBallPosition = Ball.Position + Velocity * 0.25 -- Predicting position 0.25s ahead (adjust if needed)
-    local PredictedDistance = (currentHRP.Position - FutureBallPosition).Magnitude
-
-    -- Calculate the time to impact with the predicted position
-    local TimeToImpact = (Speed > 0) and (PredictedDistance / Speed) or math.huge
-
-    if Ball:GetAttribute("target") == Player.Name and not Parried and TimeToImpact <= (IdealParryTime + DelayOffset) and TimeToImpact >= DelayOffset then
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        Parried = true
-        LastParryTime = tick()
+                        if Ball:GetAttribute("target") == Player.Name and not Parried and TimeToImpact <= (IdealParryTime + DelayOffset) and TimeToImpact >= DelayOffset then
+                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                            Parried = true
+                            LastParryTime = tick()
+                        end
+                    end
+                end
+            end
+        end
+        -- Reset parry after cooldown (this should be outside the ball/character checks if parry was successful)
+        if Parried and (tick() - LastParryTime) >= CooldownTime then
+            Parried = false
+        end
     end
 
-    -- Reset parry after cooldown
-    if Parried and (tick() - LastParryTime) >= CooldownTime then
-        Parried = false
+    -- Auto Clicker Logic
+    if AutoClickerEnabled then -- Changed: Now only depends on the checkbox state
+        -- Check if the mouse is over a GUI element that should prevent clicking, especially our own UI.
+        local mouseLocation = UserInputService:GetMouseLocation()
+        local guiObjects = Player.PlayerGui:GetGuiObjectsAtPosition(mouseLocation.X, mouseLocation.Y)
+        local clickIsOnEloHubGui = false
+        for _, guiObject in ipairs(guiObjects) do
+            if guiObject:IsDescendantOf(EloHub) then -- Check if the GUI object is part of EloHub
+                clickIsOnEloHubGui = true
+                break
+            end
+        end
+
+        if not clickIsOnEloHubGui then -- Only click if not over EloHub's own UI
+            if (tick() - LastAutoClickTime) >= AutoClickInterval then
+                -- print("EloHub: DEBUG - Attempting auto-click") -- You can uncomment this for testing
+                
+                VirtualInputManager:SendMouseButtonEvent(mouseLocation.X, mouseLocation.Y, 0, true, game, 1)
+                VirtualInputManager:SendMouseButtonEvent(mouseLocation.X, mouseLocation.Y, 0, false, game, 1)
+                
+                LastAutoClickTime = tick()
+            end
+        end
     end
 end)
 
@@ -867,7 +901,6 @@ SetupCanvasAdjustmentListener(MainTab.LeftContent)
 SetupCanvasAdjustmentListener(MainTab.RightContent)
 SetupCanvasAdjustmentListener(SettingsTab.LeftContent)
 
-
 keybindListeners["GlobalInput"] = UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
 
@@ -900,6 +933,12 @@ end
 
 -- Apply settings after UI is created and checkboxRegistry is populated
 ApplyLoadedSettings()
+
+-- Set default keybind for AutoClicker if none was loaded and the checkbox exists
+if checkboxRegistry["AutoClicker"] and not checkboxRegistry["AutoClicker"].GetKeybind() then
+    checkboxRegistry["AutoClicker"].SetKeybind(Enum.KeyCode.Z)
+    print("EloHub: Set default keybind for AutoClicker to Z.")
+end
 
 -- Initial Adjustment
 task.wait(0.5) -- Wait for UI to fully load before first adjust
