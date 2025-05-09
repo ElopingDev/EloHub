@@ -66,7 +66,7 @@ local BallsFolder = nil -- Will store the workspace.Balls folder
 -- Auto Clicker Variables
 local AutoClickerEnabled = false -- Controlled by checkbox
 local LastAutoClickTime = 0
-local AutoClickInterval = 1 / 20 -- Target 20 CPS (clicks per second)
+local AutoClickInterval = 1 / 35 -- Target 20 CPS (clicks per second)
 
 -- Parry timing settings
 local DelayOffset = 0.1        -- Don't parry too early
