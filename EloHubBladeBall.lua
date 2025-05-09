@@ -61,6 +61,7 @@ local CooldownTime = 1
 local LastParryTime = 0
 local Parried = false
 local BallConnection = nil
+local BallsFolder = nil -- Will store the workspace.Balls folder
 
 -- Parry timing settings
 local DelayOffset = 0.1        -- Don't parry too early
@@ -691,12 +692,15 @@ local AutoParry = CreateCheckbox("AutoParry", UDim2.new(0, 0, 0, 0), MainTab.Lef
 local Feature2 = CreateCheckbox("Feature2", UDim2.new(0, 0, 0, 25), MainTab.LeftContent, "Feature2")
 local Feature3 = CreateButton("Feature3", UDim2.new(0, 0, 0, 75), UDim2.new(1, -10, 0, 25), MainTab.LeftContent)
 
+-- Ball related functions
 local function GetBall()
-    for _, Ball in ipairs(workspace:WaitForChild("Balls"):GetChildren()) do
-        if Ball:GetAttribute("realBall") then
-            return Ball
+    if not BallsFolder then return nil end -- Guard: ensure BallsFolder is available
+    for _, ballInstance in ipairs(BallsFolder:GetChildren()) do
+        if ballInstance:GetAttribute("realBall") then
+            return ballInstance
         end
     end
+    return nil
 end
 
 local function ResetConnection()
@@ -706,16 +710,55 @@ local function ResetConnection()
     end
 end
 
-workspace.Balls.ChildAdded:Connect(function()
-    local Ball = GetBall()
-    if not Ball then return end
-    ResetConnection()
-    BallConnection = Ball:GetAttributeChangedSignal("target"):Connect(function()
-        Parried = false
-        LastParryTime = 0 -- Reset cooldown
-    end)
-end)
+local function SetupBallListeners()
+    if not BallsFolder then
+        warn("EloHub: SetupBallListeners called but BallsFolder is not yet available.")
+        return
+    end
 
+    local function HandleBallTargetChanges(ballInstance)
+        if not ballInstance then return end
+        ResetConnection() -- Reset any existing connection
+        BallConnection = ballInstance:GetAttributeChangedSignal("target"):Connect(function()
+            Parried = false
+            LastParryTime = 0
+        end)
+        Parried = false -- Ensure parry state is reset for the new ball/target
+        LastParryTime = 0
+    end
+
+    -- Listen for new balls being added to the BallsFolder
+    BallsFolder.ChildAdded:Connect(function(child)
+        if child:GetAttribute("realBall") then
+            -- A new ball considered "real" was added, or an existing ball's attribute changed.
+            -- Re-evaluate which ball is the current target.
+            local currentRealBall = GetBall()
+            if currentRealBall then
+                 HandleBallTargetChanges(currentRealBall)
+            end
+        end
+    end)
+
+    -- Handle any initially existing "real" ball
+    local initialBall = GetBall()
+    if initialBall then
+        HandleBallTargetChanges(initialBall)
+    end
+end
+
+-- Attempt to initialize BallsFolder and setup listeners asynchronously
+task.spawn(function()
+    local success, resultOrError = pcall(function()
+        return workspace:WaitForChild("Balls", 45) -- Increased timeout to 45 seconds
+    end)
+    if success and resultOrError then
+        BallsFolder = resultOrError
+        SetupBallListeners()
+        print("EloHub: 'Balls' folder initialized and listeners attached.")
+    else
+        warn("EloHub: 'Balls' folder not found in Workspace after waiting. Ball-related features might not work. Error: ", resultOrError)
+    end
+end)
 
 -- Hooking the AutoParry checkbox change to toggle auto parry
 AutoParry.Changed.Event:Connect(function(newState)
@@ -725,6 +768,7 @@ end)
 RunService.RenderStepped:Connect(function()
     -- Run the auto-parry logic only if AutoParry is active
     if not AutoParryActive then return end
+    if not BallsFolder then return end -- Safety check: ensure BallsFolder is available
     
     local currentCharacter = Player.Character -- Use a local variable for current character state in this frame
     local currentHRP = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
