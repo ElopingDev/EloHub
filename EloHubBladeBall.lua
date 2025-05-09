@@ -6,8 +6,10 @@ local PlayersService = game:GetService("Players") -- Standard way to get the ser
 -- Ensure LocalPlayer is available, especially important after teleports/reloads
 local LocalPlayer = PlayersService.LocalPlayer
 if not LocalPlayer then
-    PlayersService.LocalPlayerAdded:Wait()
-    LocalPlayer = PlayersService.LocalPlayer
+    repeat
+        task.wait() -- Wait a very short moment (typically one frame)
+        LocalPlayer = PlayersService.LocalPlayer
+    until LocalPlayer
 end
 
 local UserInputService = game:GetService("UserInputService")
